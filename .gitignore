@@ -132,3 +132,5 @@ dist
 *.DS_Store
 .hypothesis
 src/.DS_Store
+*/.DS_Store
+.DS_Store
