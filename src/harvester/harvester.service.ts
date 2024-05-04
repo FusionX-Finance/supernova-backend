@@ -5,12 +5,12 @@ import * as _ from 'lodash';
 import { LastProcessedBlockService } from '../last-processed-block/last-processed-block.service';
 import { Repository } from 'typeorm';
 import { PairsDictionary } from '../pair/pair.service';
-import { BlocksDictionary } from '../block/block.service';
-import { QuoteService } from '../quote/quote.service';
+import { BlockService, BlocksDictionary } from '../block/block.service';
 import { Quote } from '../quote/quote.entity';
 import { ERC20 } from '../abis/erc20.abi';
 import moment from 'moment';
-import { MulticallAbi } from '../abis/multicall.abi';
+import { MulticallAbiEthereum } from '../abis/multicall.abi';
+import { multicallAbiSei } from '../abis/multicall.abi';
 import { hexToString } from 'web3-utils';
 import { TokensByAddress } from '../token/token.service';
 import { BigNumber } from '@ethersproject/bignumber';
@@ -49,7 +49,6 @@ export interface ProcessEventsArgs {
   allQuotes?: Quote[];
   customFns?: CustomFn[];
   customData?: any;
-  blocksDictionary?: BlocksDictionary;
   skipLastProcessedBlockUpdate?: boolean;
   findQuotesForTimestamp?: AnyFunc;
   symbolizeIncludeTkn?: boolean;
@@ -79,6 +78,11 @@ export const ContractNames = {
 
 type AnyFunc = (...args: any) => any;
 
+export enum BlockchainType {
+  Ethereum = 'ethereum',
+  Sei = 'sei',
+}
+
 export interface CustomFnArgs {
   event?: unknown;
   rawEvent?: any;
@@ -93,11 +97,18 @@ export interface CustomFnArgs {
 }
 @Injectable()
 export class HarvesterService {
+  private harvestEventsBatchSize;
+  private harvestConcurrency;
+
   constructor(
     private configService: ConfigService,
     private lastProcessedBlockService: LastProcessedBlockService,
+    private blockService: BlockService,
     @Inject('BLOCKCHAIN_CONFIG') private blockchainConfig: any,
-  ) {}
+  ) {
+    this.harvestEventsBatchSize = +this.configService.get('HARVEST_EVENTS_BATCH_SIZE');
+    this.harvestConcurrency = +this.configService.get('HARVEST_CONCURRENCY');
+  }
 
   async fetchEventsFromBlockchain(
     contractName: string,
@@ -126,21 +137,20 @@ export class HarvesterService {
       ranges.push({ rangeStart: fromBlock, rangeEnd: toBlock });
     }
     const limit = (await import('p-limit')).default;
-    const concurrency = limit(10);
-    for (const range of ranges) {
-      const fullRange = createRange(range.rangeStart, range.rangeEnd);
-      const batches = _.chunk(fullRange, 2000);
+    const concurrency = limit(this.harvestConcurrency);
 
+    for (const range of ranges) {
       const contract = this.getContract(contractName, range.version, address);
 
-      for (const batch of batches) {
+      for (let startBlock = range.rangeStart; startBlock <= range.rangeEnd; startBlock += this.harvestEventsBatchSize) {
+        const endBlock = Math.min(startBlock + this.harvestEventsBatchSize - 1, range.rangeEnd, toBlock);
         tasks.push(
           concurrency(async () => {
             const _events = await contract.getPastEvents(eventName, {
-              fromBlock: batch[0],
-              toBlock: batch[batch.length - 1],
+              fromBlock: startBlock,
+              toBlock: endBlock,
             });
-            if (_events) {
+            if (_events.length > 0) {
               _events.forEach((e) => events.push(e));
             }
           }),
@@ -195,7 +205,6 @@ export class HarvesterService {
       tagTimestampFromBlock,
       allQuotes,
       customFns,
-      blocksDictionary,
       skipLastProcessedBlockUpdate,
       findQuotesForTimestamp,
       dateFields,
@@ -232,6 +241,13 @@ export class HarvesterService {
 
     let newEvents = [];
     if (events.length > 0) {
+      let blocksDictionary: BlocksDictionary;
+
+      if (tagTimestampFromBlock) {
+        const blockIds = [...new Set(events.map((b) => Number(b.blockNumber)))];
+        blocksDictionary = await this.blockService.getBlocksDictionary(blockIds);
+      }
+
       newEvents = await Promise.all(
         events.map(async (e) => {
           let newEvent = repository.create({
@@ -345,20 +361,46 @@ export class HarvesterService {
     return this.configService.get('CONTRACTS_ENV');
   }
 
-  async stringsWithMulticall(addresses: string[], abi: any, fn: string): Promise<string[]> {
-    const data = await this.withMulticall(addresses, abi, fn);
+  async stringsWithMulticall(
+    addresses: string[],
+    abi: any,
+    fn: string,
+    blockchainType: BlockchainType,
+  ): Promise<string[]> {
+    if (blockchainType === BlockchainType.Sei) {
+      return this.stringsWithMulticallSei(addresses, abi, fn);
+    } else if (blockchainType === BlockchainType.Ethereum) {
+      return this.stringsWithMulticallEthereum(addresses, abi, fn);
+    }
+  }
+
+  async integersWithMulticall(
+    addresses: string[],
+    abi: any,
+    fn: string,
+    blockchainType: BlockchainType,
+  ): Promise<number[]> {
+    if (blockchainType === BlockchainType.Sei) {
+      return this.integersWithMulticallSei(addresses, abi, fn);
+    } else if (blockchainType === BlockchainType.Ethereum) {
+      return this.integersWithMulticallEthereum(addresses, abi, fn);
+    }
+  }
+
+  async stringsWithMulticallEthereum(addresses: string[], abi: any, fn: string): Promise<string[]> {
+    const data = await this.withMulticallEthereum(addresses, abi, fn);
     return data.map((r) => hexToString(r.data).replace(/[^a-zA-Z0-9]/g, ''));
   }
 
-  async integersWithMulticall(addresses: string[], abi: any, fn: string): Promise<number[]> {
-    const data = await this.withMulticall(addresses, abi, fn);
+  async integersWithMulticallEthereum(addresses: string[], abi: any, fn: string): Promise<number[]> {
+    const data = await this.withMulticallEthereum(addresses, abi, fn);
     return data.map((r) => parseInt(r.data));
   }
 
-  async withMulticall(addresses: string[], abi: any, fn: string): Promise<any> {
+  async withMulticallEthereum(addresses: string[], abi: any, fn: string): Promise<any> {
     const web3 = new Web3(this.blockchainConfig.ethereumEndpoint);
 
-    const multicall: any = new web3.eth.Contract(MulticallAbi, this.configService.get('MULTICALL_ADDRESS'));
+    const multicall: any = new web3.eth.Contract(MulticallAbiEthereum, this.configService.get('MULTICALL_ADDRESS'));
     let data = [];
     const batches = _.chunk(addresses, 1000);
     for (const batch of batches) {
@@ -375,12 +417,37 @@ export class HarvesterService {
     }
     return data;
   }
+
+  async stringsWithMulticallSei(addresses: string[], abi: any, fn: string): Promise<string[]> {
+    const data = await this.withMulticallSei(addresses, abi, fn);
+    return data.map((r) => hexToString(r).replace(/[^a-zA-Z0-9]/g, ''));
+  }
+
+  async integersWithMulticallSei(addresses: string[], abi: any, fn: string): Promise<number[]> {
+    const data = await this.withMulticallSei(addresses, abi, fn);
+    return data.map((r) => parseInt(r));
+  }
+
+  async withMulticallSei(addresses: string[], abi: any, fn: string): Promise<any> {
+    const web3 = new Web3(this.blockchainConfig.ethereumEndpoint);
+
+    const multicall: any = new web3.eth.Contract(multicallAbiSei, this.configService.get('MULTICALL_ADDRESS'));
+    let data = [];
+    const batches = _.chunk(addresses, 1000);
+    for (const batch of batches) {
+      const calls = [];
+      batch.forEach((address) => {
+        const contract = new web3.eth.Contract([abi], address);
+        calls.push({ target: contract.options.address, callData: contract.methods[fn]().encodeABI() });
+      });
+
+      if (calls.length > 0) {
+        const result = await multicall.methods.aggregate(calls).call();
+        data = data.concat(result.returnData);
+      }
+    }
+    return data;
+  }
 }
 
 const camelToSnakeCase = (str) => str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-
-function createRange(start, end) {
-  return Array(end - start + 1)
-    .fill(1)
-    .map((_, idx) => start + idx);
-}

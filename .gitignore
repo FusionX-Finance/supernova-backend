@@ -134,3 +134,6 @@ dist
 src/.DS_Store
 */.DS_Store
 .DS_Store
+
+# typechain
+/src/abis/types

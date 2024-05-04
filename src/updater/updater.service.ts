@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { Inject, Injectable } from '@nestjs/common';
 import * as _ from 'lodash';
 import { HarvesterService } from '../harvester/harvester.service';
-import { BlockService } from '../block/block.service';
 import { LastProcessedBlockService } from '../last-processed-block/last-processed-block.service';
 import { TokenService } from '../token/token.service';
 import { PairService } from '../pair/pair.service';
@@ -15,19 +14,20 @@ import { CoingeckoService } from '../v1/coingecko/coingecko.service';
 import { PairTradingFeePpmUpdatedEventService } from '../events/pair-trading-fee-ppm-updated-event/pair-trading-fee-ppm-updated-event.service';
 import { TradingFeePpmUpdatedEventService } from '../events/trading-fee-ppm-updated-event/trading-fee-ppm-updated-event.service';
 import { ActivityService } from '../v1/activity/activity.service';
-import { HistoricQuoteService } from '../historic-quote/historic-quote.service';
 import { VoucherTransferEventService } from '../events/voucher-transfer-event/voucher-transfer-event.service';
+import { AnalyticsService } from '../v1/analytics/analytics.service';
 
 export const CARBON_IS_UPDATING = 'carbon:isUpdating';
+export const CARBON_IS_UPDATING_ANALYTICS = 'carbon:isUpdatingAnalytics';
 
 @Injectable()
 export class UpdaterService {
   private isUpdating: boolean;
+  private isUpdatingAnalytics: boolean;
 
   constructor(
     private configService: ConfigService,
     private harvesterService: HarvesterService,
-    private blockService: BlockService,
     private lastProcessedBlockService: LastProcessedBlockService,
     private tokenService: TokenService,
     private pairService: PairService,
@@ -39,8 +39,8 @@ export class UpdaterService {
     private tradingFeePpmUpdatedEventService: TradingFeePpmUpdatedEventService,
     private pairTradingFeePpmUpdatedEventService: PairTradingFeePpmUpdatedEventService,
     private activityService: ActivityService,
-    private historyQuoteService: HistoricQuoteService,
     private voucherTransferEventService: VoucherTransferEventService,
+    private analyticsService: AnalyticsService,
     @Inject('REDIS') private redis: any,
   ) {}
 
@@ -61,7 +61,7 @@ export class UpdaterService {
     try {
       this.isUpdating = true;
       const lockDuration = parseInt(this.configService.get('CARBON_LOCK_DURATION')) || 120;
-      await this.redis.client.setex('carbon:isUpdating', lockDuration, 1);
+      await this.redis.client.setex(CARBON_IS_UPDATING, lockDuration, 1);
       if (endBlock === -12) {
         if (this.configService.get('IS_FORK') === '1') {
           endBlock = await this.harvesterService.latestBlock();
@@ -70,71 +70,90 @@ export class UpdaterService {
         }
       }
 
-      await this.blockService.update(endBlock);
-      console.log('CARBON SERVICE - Finished blocks');
+      // handle PairCreated events
+      await this.pairCreatedEventService.update(endBlock);
+      console.log('CARBON SERVICE - Finished pairs creation events');
 
-      const firstUnprocessedBlockNumber = await this.lastProcessedBlockService.firstUnprocessedBlockNumber();
-      const fullRange = range(firstUnprocessedBlockNumber, endBlock);
-      const batches = _.chunk(fullRange, 1000000);
+      // create tokens
+      await this.tokenService.update(endBlock);
+      const tokens = await this.tokenService.allByAddress();
+      console.log('CARBON SERVICE - Finished tokens');
 
-      for (const batch of batches) {
-        const toBlock = batch[batch.length - 1];
-        const blocksDictionary = await this.blockService.getBlocksDictionary(batch[0], toBlock);
+      // create pairs
+      await this.pairService.update(endBlock, tokens);
+      const pairs = await this.pairService.allAsDictionary();
+      console.log('CARBON SERVICE - Finished pairs');
 
-        // handle PairCreated events
-        await this.pairCreatedEventService.update(toBlock);
-        console.log('CARBON SERVICE - Finished pairs creation events');
+      // create strategies
+      await this.strategyService.update(endBlock, pairs, tokens);
+      console.log('CARBON SERVICE - Finished strategies');
 
-        // create tokens
-        await this.tokenService.update(toBlock);
-        const tokens = await this.tokenService.allByAddress();
-        console.log('CARBON SERVICE - Finished tokens');
+      // create trades
+      await this.tokensTradedEventService.update(endBlock, pairs, tokens);
+      console.log('CARBON SERVICE - Finished trades');
 
-        // create pairs
-        await this.pairService.update(toBlock, tokens);
-        const pairs = await this.pairService.allAsDictionary();
-        console.log('CARBON SERVICE - Finished pairs');
+      // ROI
+      await this.roiService.update();
+      console.log('CARBON SERVICE - Finished updating ROI');
 
-        // create strategies
-        await this.strategyService.update(toBlock, pairs, tokens, blocksDictionary);
-        console.log('CARBON SERVICE - Finished strategies');
+      // coingecko tickers
+      await this.coingeckoService.update();
+      console.log('CARBON SERVICE - Finished updating coingecko tickers');
 
-        // create trades
-        await this.tokensTradedEventService.update(toBlock, pairs, tokens, blocksDictionary);
-        console.log('CARBON SERVICE - Finished trades');
+      // trading fee events
+      await this.tradingFeePpmUpdatedEventService.update(endBlock);
+      console.log('CARBON SERVICE - Finished updating trading fee events');
 
-        // ROI
-        await this.roiService.update();
-        console.log('CARBON SERVICE - Finished updating ROI');
+      // pair trading fee events
+      await this.pairTradingFeePpmUpdatedEventService.update(endBlock, pairs, tokens);
+      console.log('CARBON SERVICE - Finished updating pair trading fee events');
 
-        // coingecko tickers
-        await this.coingeckoService.update();
-        console.log('CARBON SERVICE - Finished updating coingecko tickers');
+      await this.voucherTransferEventService.update(endBlock);
+      console.log('CARBON SERVICE - Finished updating voucher transfer events');
 
-        // trading fee events
-        await this.tradingFeePpmUpdatedEventService.update(toBlock, blocksDictionary);
-        console.log('CARBON SERVICE - Finished updating trading fee events');
-
-        // pair trading fee events
-        await this.pairTradingFeePpmUpdatedEventService.update(toBlock, pairs, tokens, blocksDictionary);
-        console.log('CARBON SERVICE - Finished updating pair trading fee events');
-
-        await this.voucherTransferEventService.update(toBlock, blocksDictionary);
-        console.log('CARBON SERVICE - Finished updating voucher transfer events');
-
-        // activity
-        await this.activityService.update();
-        console.log('CARBON SERVICE - Finished updating activity');
-      }
+      // activity
+      await this.activityService.update();
+      console.log('CARBON SERVICE - Finished updating activity');
 
       // finish
-      console.log('CARBON SERVICE -', 'Finished update iteration in:', Date.now() - t), 'ms';
+      console.log('CARBON SERVICE -', 'Finished update iteration in:', Date.now() - t, 'ms');
       this.isUpdating = false;
       await this.redis.client.set(CARBON_IS_UPDATING, 0);
     } catch (error) {
       console.log('error in carbon updater', error, Date.now() - t);
       this.isUpdating = false;
       await this.redis.client.set(CARBON_IS_UPDATING, 0);
+    }
+  }
+
+  @Interval(5000)
+  async updateAnalytics(): Promise<any> {
+    const shouldUpdateAnalytics = this.configService.get('SHOULD_UPDATE_ANALYTICS');
+    if (shouldUpdateAnalytics !== '1') return;
+
+    if (this.isUpdatingAnalytics) return;
+
+    const isUpdatingAnalytics = await this.redis.client.get(CARBON_IS_UPDATING_ANALYTICS);
+    if (isUpdatingAnalytics === '1' && process.env.NODE_ENV === 'production') return;
+
+    console.log('CARBON SERVICE - Started analytics update cycle');
+    const t = Date.now();
+
+    try {
+      this.isUpdatingAnalytics = true;
+      const lockDuration = parseInt(this.configService.get('CARBON_LOCK_DURATION')) || 120;
+      await this.redis.client.setex(CARBON_IS_UPDATING_ANALYTICS, lockDuration, 1);
+
+      // analytics
+      await this.analyticsService.update();
+      console.log('CARBON SERVICE -', 'Finished updating analytics in:', Date.now() - t, 'ms');
+
+      this.isUpdatingAnalytics = false;
+      await this.redis.client.set(CARBON_IS_UPDATING_ANALYTICS, 0);
+    } catch (error) {
+      console.log('error in carbon analytics updater', error, Date.now() - t);
+      this.isUpdatingAnalytics = false;
+      await this.redis.client.set(CARBON_IS_UPDATING_ANALYTICS, 0);
     }
   }
 }
