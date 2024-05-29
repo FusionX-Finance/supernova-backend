@@ -59,6 +59,10 @@ export class TokensTradedEvent {
   @Column()
   transactionHash: string;
 
+  @Column({ nullable: true })
+  @Index()
+  callerId: string;
+
   @Column()
   logIndex: number;
 
