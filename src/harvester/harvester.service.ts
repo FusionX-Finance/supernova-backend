@@ -9,7 +9,7 @@ import { BlockService, BlocksDictionary } from '../block/block.service';
 import { Quote } from '../quote/quote.entity';
 import { ERC20 } from '../abis/erc20.abi';
 import moment from 'moment';
-import { MulticallAbiEthereum } from '../abis/multicall.abi';
+import { MulticallAbiEthereum, MulticallAbiMantle } from '../abis/multicall.abi';
 import { multicallAbiSei } from '../abis/multicall.abi';
 import { hexToString } from 'web3-utils';
 import { TokensByAddress } from '../token/token.service';
@@ -82,6 +82,7 @@ type AnyFunc = (...args: any) => any;
 export enum BlockchainType {
   Ethereum = 'ethereum',
   Sei = 'sei',
+  Mantle = 'mantle',
 }
 
 export interface CustomFnArgs {
@@ -379,6 +380,8 @@ export class HarvesterService {
       return this.stringsWithMulticallSei(addresses, abi, fn);
     } else if (blockchainType === BlockchainType.Ethereum) {
       return this.stringsWithMulticallEthereum(addresses, abi, fn);
+    } else if (blockchainType === BlockchainType.Mantle) {
+      return this.stringsWithMulticallMantle(addresses, abi, fn);
     }
   }
 
@@ -392,6 +395,8 @@ export class HarvesterService {
       return this.integersWithMulticallSei(addresses, abi, fn);
     } else if (blockchainType === BlockchainType.Ethereum) {
       return this.integersWithMulticallEthereum(addresses, abi, fn);
+    } else if (blockchainType === BlockchainType.Mantle) {
+      return this.integersWithMulticallMantle(addresses, abi, fn);
     }
   }
 
@@ -451,6 +456,37 @@ export class HarvesterService {
 
       if (calls.length > 0) {
         const result = await multicall.methods.aggregate(calls).call();
+        data = data.concat(result.returnData);
+      }
+    }
+    return data;
+  }
+
+  async stringsWithMulticallMantle(addresses: string[], abi: any, fn: string): Promise<string[]> {
+    const data = await this.withMulticallMantle(addresses, abi, fn);
+    return data.map((r) => hexToString(r).replace(/[^a-zA-Z0-9]/g, ''));
+  }
+
+  async integersWithMulticallMantle(addresses: string[], abi: any, fn: string): Promise<number[]> {
+    const data = await this.withMulticallMantle(addresses, abi, fn);
+    return data.map((r) => parseInt(r));
+  }
+
+  async withMulticallMantle(addresses: string[], abi: any, fn: string): Promise<any> {
+    const web3 = new Web3(this.blockchainConfig.ethereumEndpoint);
+
+    const multicall: any = new web3.eth.Contract(MulticallAbiMantle, this.configService.get('MULTICALL_ADDRESS'));
+    let data = [];
+    const batches = _.chunk(addresses, 1000);
+    for (const batch of batches) {
+      const calls = [];
+      batch.forEach((address) => {
+        const contract = new web3.eth.Contract([abi], address);
+        calls.push([contract.options.address, contract.methods[fn]().encodeABI()]);
+      });
+
+      if (calls.length > 0) {
+        const result = await multicall.methods.aggregate(calls, false).call();
         data = data.concat(result.returnData);
       }
     }

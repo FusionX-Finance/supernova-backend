@@ -108,7 +108,7 @@ export class TokenService {
     const eth = this.configService.get('ETH');
     const index = addresses.indexOf(eth);
     if (index >= 0) {
-      symbols[index] = 'ETH';
+      symbols[index] = 'MNT';
     }
     return symbols;
   }
@@ -118,7 +118,7 @@ export class TokenService {
     const eth = this.configService.get('ETH');
     const index = addresses.indexOf(eth);
     if (index >= 0) {
-      names[index] = 'Ethereum';
+      names[index] = 'Mantle';
     }
     return names;
   }
