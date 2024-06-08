@@ -73,14 +73,14 @@ export class QuoteService implements OnModuleInit {
     return tokensByAddress;
   }
 
-  async fetchLatestPrice(address: string, convert = ['usd']): Promise<any> {
+  async fetchLatestPrice(address: string, convert = ['usd'], network = 'mantle'): Promise<any> {
     const ETH = this.configService.get('ETH');
     try {
       let price;
       if (address.toLowerCase() === ETH.toLowerCase()) {
-        price = await this.coingeckoService.getLatestEthPrice(convert);
+        price = await this.coingeckoService.getLatestEthPrice(convert, network);
       } else {
-        price = await this.coingeckoService.getLatestPrices([address], convert);
+        price = await this.coingeckoService.getLatestPrices([address], convert, network);
       }
 
       return price;

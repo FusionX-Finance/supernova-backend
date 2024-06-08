@@ -34,8 +34,10 @@ export class MarketRateController {
       };
       _address = seiMap[address.toLowerCase()];
       data = await this.coingeckoService.getCoinPrices([_address], currencies);
+    } else if (this.blockchainType === BlockchainType.Mantle) {
+      data = await this.quoteService.fetchLatestPrice(_address, currencies, 'mantle'); // mantle: name must be compatible to coingecko API
     } else {
-      data = await this.quoteService.fetchLatestPrice(_address, currencies);
+      data = await this.quoteService.fetchLatestPrice(_address, currencies, 'ethereum');
     }
 
     const result = {

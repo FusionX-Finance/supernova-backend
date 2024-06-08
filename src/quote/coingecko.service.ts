@@ -8,7 +8,7 @@ export class CoinGeckoService {
 
   private readonly baseURL = 'https://pro-api.coingecko.com/api/v3';
 
-  async getLatestPrices(contractAddresses: string[], convert = ['usd']): Promise<any> {
+  async getLatestPrices(contractAddresses: string[], convert = ['usd'], network = 'mantle'): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
     const batchSize = 150;
 
@@ -20,7 +20,7 @@ export class CoinGeckoService {
       }
 
       const requests = batches.map(async (batch) => {
-        return axios.get(`${this.baseURL}/simple/token_price/ethereum`, {
+        return axios.get(`${this.baseURL}/simple/token_price/${network}`, {
           params: {
             contract_addresses: batch.join(','),
             vs_currencies: convert.join(','),
@@ -44,14 +44,14 @@ export class CoinGeckoService {
     }
   }
 
-  async getLatestEthPrice(convert = ['usd']): Promise<any> {
+  async getLatestEthPrice(convert = ['usd'], network = 'mantle'): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
     const ETH = this.configService.get('ETH');
 
     try {
       const response = await axios.get(`${this.baseURL}/simple/price`, {
         params: {
-          ids: 'ethereum',
+          ids: network,
           vs_currencies: convert.join(','),
           include_last_updated_at: true,
         },
@@ -62,11 +62,11 @@ export class CoinGeckoService {
 
       const result = {
         [ETH.toLowerCase()]: {
-          last_updated_at: response.data['ethereum']['last_updated_at'],
+          last_updated_at: response.data[network]['last_updated_at'],
         },
       };
       convert.forEach((c) => {
-        result[ETH.toLowerCase()][c.toLowerCase()] = response.data['ethereum'][c.toLowerCase()];
+        result[ETH.toLowerCase()][c.toLowerCase()] = response.data[network][c.toLowerCase()];
       });
       return result;
     } catch (error) {
@@ -84,6 +84,8 @@ export class CoinGeckoService {
         const batch = contractAddresses.slice(i, i + batchSize);
         batches.push(batch);
       }
+
+      console.log('batches', batches);
 
       const requests = batches.map(async (batch) => {
         return axios.get(`${this.baseURL}/simple/price`, {
