@@ -148,7 +148,9 @@ export class UpdaterService {
     const shouldUpdateAnalytics = this.configService.get('SHOULD_UPDATE_ANALYTICS');
     if (shouldUpdateAnalytics !== '1') return;
 
-    const deployments = this.deploymentService.getDeployments();
+    const deployments = this.deploymentService
+      .getDeployments()
+      .filter((deployment) => deployment.blockchainType !== BlockchainType.Mantle);
     await Promise.all(deployments.map((deployment) => this.updateDeploymentAnalytics(deployment)));
   }
 
