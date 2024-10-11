@@ -52,7 +52,7 @@ export class UpdaterService {
     if (shouldHarvest === '1') {
       const deployments = this.deploymentService
         .getDeployments()
-        .filter((deployment) => deployment.blockchainType !== BlockchainType.Mantle);
+        .filter((deployment) => deployment.blockchainType === BlockchainType.Mantle);
       deployments.forEach((deployment) => {
         const updateInterval = 5000; // Customize the interval as needed
         this.scheduleDeploymentUpdate(deployment, updateInterval);
@@ -150,7 +150,7 @@ export class UpdaterService {
 
     const deployments = this.deploymentService
       .getDeployments()
-      .filter((deployment) => deployment.blockchainType !== BlockchainType.Mantle);
+      .filter((deployment) => deployment.blockchainType === BlockchainType.Mantle);
     await Promise.all(deployments.map((deployment) => this.updateDeploymentAnalytics(deployment)));
   }
 
