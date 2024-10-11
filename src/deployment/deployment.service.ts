@@ -7,6 +7,7 @@ export enum BlockchainType {
   Sei = 'sei-network',
   Celo = 'celo',
   Blast = 'blast',
+  Mantle = 'mantle',
 }
 
 export enum ExchangeId {
@@ -14,6 +15,7 @@ export enum ExchangeId {
   OGSei = 'sei',
   OGCelo = 'celo',
   OGBlast = 'blast',
+  OGMantle = 'mantle',
 }
 
 export interface GasToken {
@@ -96,6 +98,20 @@ export class DeploymentService {
         gasToken: {
           name: 'Blast',
           symbol: 'BLAST',
+          address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+        },
+      },
+      {
+        exchangeId: ExchangeId.OGMantle,
+        blockchainType: BlockchainType.Mantle,
+        rpcEndpoint: this.configService.get('MANTLE_RPC_ENDPOINT'),
+        harvestEventsBatchSize: 1000,
+        harvestConcurrency: 5,
+        multicallAddress: '0xb55cc6B5B402437b66c13c0CEd0EF367aa7c26da',
+        startBlock: 61955427,
+        gasToken: {
+          name: 'Mantle',
+          symbol: 'MNT',
           address: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
         },
       },

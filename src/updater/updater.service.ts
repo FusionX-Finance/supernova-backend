@@ -18,7 +18,7 @@ import { AnalyticsService } from '../v1/analytics/analytics.service';
 import { DexScreenerService } from '../v1/dex-screener/dex-screener.service';
 import { ActivityService } from '../activity/activity.service';
 import { TvlService } from '../tvl/tvl.service';
-import { Deployment, DeploymentService } from '../deployment/deployment.service'; // Import DeploymentService
+import { BlockchainType, Deployment, DeploymentService } from '../deployment/deployment.service'; // Import DeploymentService
 
 export const CARBON_IS_UPDATING = 'carbon:isUpdating';
 export const CARBON_IS_UPDATING_ANALYTICS = 'carbon:isUpdatingAnalytics';
@@ -50,7 +50,9 @@ export class UpdaterService {
   ) {
     const shouldHarvest = this.configService.get('SHOULD_HARVEST');
     if (shouldHarvest === '1') {
-      const deployments = this.deploymentService.getDeployments();
+      const deployments = this.deploymentService
+        .getDeployments()
+        .filter((deployment) => deployment.blockchainType !== BlockchainType.Mantle);
       deployments.forEach((deployment) => {
         const updateInterval = 5000; // Customize the interval as needed
         this.scheduleDeploymentUpdate(deployment, updateInterval);
