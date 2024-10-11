@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
+import { Deployment } from '../deployment/deployment.service';
 
 @Injectable()
 export class CoinGeckoService {
@@ -8,8 +9,9 @@ export class CoinGeckoService {
 
   private readonly baseURL = 'https://pro-api.coingecko.com/api/v3';
 
-  async getLatestPrices(contractAddresses: string[], convert = ['usd'], network = 'mantle'): Promise<any> {
+  async getLatestPrices(contractAddresses: string[], deployment: Deployment, convert = ['usd']): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
+    const blockchainType = deployment.blockchainType;
     const batchSize = 150;
 
     try {
@@ -20,7 +22,7 @@ export class CoinGeckoService {
       }
 
       const requests = batches.map(async (batch) => {
-        return axios.get(`${this.baseURL}/simple/token_price/${network}`, {
+        return axios.get(`${this.baseURL}/simple/token_price/${blockchainType}`, {
           params: {
             contract_addresses: batch.join(','),
             vs_currencies: convert.join(','),
@@ -35,6 +37,7 @@ export class CoinGeckoService {
       const responses = await Promise.all(requests);
       let result = {};
       responses.forEach((r) => {
+        r.data.provider = 'coingecko';
         result = { ...result, ...r.data };
       });
 
@@ -44,14 +47,15 @@ export class CoinGeckoService {
     }
   }
 
-  async getLatestEthPrice(convert = ['usd'], network = 'mantle'): Promise<any> {
+  async getLatestGasTokenPrice(deployment: Deployment, convert = ['usd']): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
-    const ETH = this.configService.get('ETH');
+    const blockchainType = deployment.blockchainType;
+    const gasToken = deployment.gasToken;
 
     try {
       const response = await axios.get(`${this.baseURL}/simple/price`, {
         params: {
-          ids: network,
+          ids: blockchainType,
           vs_currencies: convert.join(','),
           include_last_updated_at: true,
         },
@@ -61,27 +65,27 @@ export class CoinGeckoService {
       });
 
       const result = {
-        [ETH.toLowerCase()]: {
-          last_updated_at: response.data[network]['last_updated_at'],
+        [gasToken.address.toLowerCase()]: {
+          last_updated_at: response.data[blockchainType]['last_updated_at'],
         },
       };
       convert.forEach((c) => {
-        result[ETH.toLowerCase()][c.toLowerCase()] = response.data[network][c.toLowerCase()];
+        result[gasToken.address.toLowerCase()][c.toLowerCase()] = response.data[blockchainType][c.toLowerCase()];
       });
       return result;
     } catch (error) {
-      throw new Error(`Failed to fetch latest token prices: ${error.message}`);
+      throw new Error(`Failed to fetch latest gas token prices: ${error.message}`);
     }
   }
 
-  async getCoinPrices(contractAddresses: string[], convert = ['usd']): Promise<any> {
+  async getCoinPrices(coinIds: string[], convert = ['usd']): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
     const batchSize = 150;
 
     try {
       const batches: string[][] = [];
-      for (let i = 0; i < contractAddresses.length; i += batchSize) {
-        const batch = contractAddresses.slice(i, i + batchSize);
+      for (let i = 0; i < coinIds.length; i += batchSize) {
+        const batch = coinIds.slice(i, i + batchSize);
         batches.push(batch);
       }
 

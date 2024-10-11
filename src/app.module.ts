@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CacheInterceptor, CacheModule } from '@nestjs/cache-manager';
-import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import { LastProcessedBlockModule } from './last-processed-block/last-processed-block.module';
 import { BlockModule } from './block/block.module';
 import { RedisModule } from './redis/redis.module';
@@ -16,8 +15,13 @@ import { TokenModule } from './token/token.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { redisStore } from 'cache-manager-redis-yet';
 import { V1Module } from './v1/v1.module';
-import { DuneModule } from './dune/dune.module';
 import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
+import { ActivityModule } from './activity/activity.module';
+import { VolumeModule } from './volume/volume.module';
+import { TvlModule } from './tvl/tvl.module';
+import { DeploymentModule } from './deployment/deployment.module';
+import { CodexService } from './codex/codex.service';
+import { CodexModule } from './codex/codex.module';
 
 @Module({
   imports: [
@@ -26,20 +30,11 @@ import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService): Promise<any> => {
-        let url: string;
         let ssl: any;
         const dbSync = configService.get('DB_SYNC') === '1' ? true : false;
         if (process.env.NODE_ENV === 'production') {
-          const secrets = new SecretManagerServiceClient();
-          let [version] = await secrets.accessSecretVersion({
-            name: configService.get('CARBON_BACKEND_SQL_URL'),
-          });
-          url = version.payload.data.toString();
-          [version] = await secrets.accessSecretVersion({
-            name: configService.get('CARBON_BACKEND_SQL_CERTIFICATION'),
-          });
           ssl = {
-            ca: version.payload.data.toString(),
+            ca: configService.get('CARBON_BACKEND_SQL_CERTIFICATION'),
             ciphers: [
               'ECDHE-RSA-AES128-SHA256',
               'DHE-RSA-AES128-SHA256',
@@ -51,12 +46,11 @@ import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
             ].join(':'),
             honorCipherOrder: true,
           };
-        } else {
-          url = configService.get('CARBON_BACKEND_SQL_URL');
         }
+
         return {
           type: 'postgres',
-          url,
+          url: configService.get('DATABASE_URL'),
           entities: [__dirname + '/**/*.entity.js'],
           migrations: [__dirname + '/migrations/*.js'],
           cli: {
@@ -79,11 +73,9 @@ import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
         }
         return {
           store: await redisStore({
-            url: configService.get('CARBON_REDIS_URL'),
+            url: configService.get('REDIS_URL'),
           }),
-          host: 'localhost',
-          port: 6379,
-          ttl: 300, // seconds
+          ttl: 300,
         };
       },
       inject: [ConfigService],
@@ -99,8 +91,12 @@ import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
     TokenModule,
     UpdaterModule,
     V1Module,
-    DuneModule,
     HistoricQuoteModule,
+    ActivityModule,
+    VolumeModule,
+    TvlModule,
+    DeploymentModule,
+    CodexModule,
   ],
 
   providers: [
@@ -108,6 +104,7 @@ import { HistoricQuoteModule } from './historic-quote/historic-quote.module';
       provide: APP_INTERCEPTOR,
       useClass: CacheInterceptor,
     },
+    CodexService,
   ],
 })
 export class AppModule {}

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { BlockModule } from '../block/block.module';
-import { BlockchainConfigModule } from '../blockchain-config/blockchain-config.module';
 import { RedisModule } from '../redis/redis.module';
 import { UpdaterService } from './updater.service';
 import { HarvesterModule } from '../harvester/harvester.module';
@@ -16,16 +15,19 @@ import { RoiModule } from '../v1/roi/roi.module';
 import { CoingeckoModule } from '../v1/coingecko/coingecko.module';
 import { TradingFeePpmUpdatedEventModule } from '../events/trading-fee-ppm-updated-event/trading-fee-ppm-updated-event.module';
 import { PairTradingFeePpmUpdatedEventModule } from '../events/pair-trading-fee-ppm-updated-event/pair-trading-fee-ppm-updated-event.module';
-import { ActivityModule } from '../v1/activity/activity.module';
+import { ActivityModule } from '../activity/activity.module';
 import { HistoricQuoteModule } from '../historic-quote/historic-quote.module';
 import { VoucherTransferEventModule } from '../events/voucher-transfer-event/voucher-transfer-event.module';
 import { AnalyticsModule } from '../v1/analytics/analytics.module';
 import { DexScreenerModule } from '../v1/dex-screener/dex-screener.module';
+import { VolumeModule } from '../volume/volume.module';
+import { TvlModule } from '../tvl/tvl.module';
+import { DeploymentModule } from '../deployment/deployment.module';
+import { CodexModule } from '../codex/codex.module';
 
 @Module({
   imports: [
     BlockModule,
-    BlockchainConfigModule,
     RedisModule,
     HarvesterModule,
     LastProcessedBlockModule,
@@ -45,6 +47,10 @@ import { DexScreenerModule } from '../v1/dex-screener/dex-screener.module';
     VoucherTransferEventModule,
     AnalyticsModule,
     DexScreenerModule,
+    VolumeModule,
+    TvlModule,
+    DeploymentModule,
+    CodexModule,
   ],
   providers: [UpdaterService],
 })

@@ -5,10 +5,11 @@ import * as path from 'path';
 import * as childProcess from 'child_process';
 import Decimal from 'decimal.js';
 import moment from 'moment';
-import { toTimestamp } from 'src/utilities';
+import { toTimestamp } from '../../utilities';
 import { PairTradingFeePpmUpdatedEventService } from '../../events/pair-trading-fee-ppm-updated-event/pair-trading-fee-ppm-updated-event.service';
 import { TradingFeePpmUpdatedEventService } from '../../events/trading-fee-ppm-updated-event/trading-fee-ppm-updated-event.service';
 import { HistoricQuoteService } from '../../historic-quote/historic-quote.service';
+import { BlockchainType, Deployment, DeploymentService, ExchangeId } from '../../deployment/deployment.service';
 
 @Injectable()
 export class SimulatorService {
@@ -18,14 +19,21 @@ export class SimulatorService {
     private readonly historicQuoteService: HistoricQuoteService,
   ) {}
 
-  async generateSimulation(params: SimulatorDto, usdPrices: any): Promise<any> {
+  async generateSimulation(params: SimulatorDto, usdPrices: any, deployment: Deployment): Promise<any> {
     const { start, end, buyBudget, sellBudget, buyMin, buyMax, sellMin, sellMax } = params;
-    const baseToken = params['baseToken'].toLowerCase();
-    const quoteToken = params['quoteToken'].toLowerCase();
+    let baseToken = params['baseToken'].toLowerCase();
+    let quoteToken = params['quoteToken'].toLowerCase();
+
+    const seiToken = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    const wrappedSeiToken = '0xe30fedd158a2e3b13e9badaeabafc5516e95e8c7';
+    if (deployment.blockchainType === BlockchainType.Sei) {
+      baseToken = baseToken === seiToken ? wrappedSeiToken : baseToken;
+      quoteToken = quoteToken === seiToken ? wrappedSeiToken : quoteToken;
+    }
 
     // handle fees
-    const defaultFee = (await this.tradingFeePpmUpdatedEventService.last()).newFeePPM;
-    const pairFees = await this.pairTradingFeePpmUpdatedEventService.allAsDictionary();
+    const defaultFee = (await this.tradingFeePpmUpdatedEventService.last(deployment)).newFeePPM;
+    const pairFees = await this.pairTradingFeePpmUpdatedEventService.allAsDictionary(deployment);
     let feePpm;
     if (pairFees[baseToken] && pairFees[baseToken][quoteToken]) {
       feePpm = pairFees[baseToken][quoteToken];
@@ -35,7 +43,12 @@ export class SimulatorService {
 
     // handle prices
     const tokens = [baseToken, quoteToken];
-    const prices = await this.historicQuoteService.getHistoryQuotesBuckets(tokens, start, end);
+    const prices = await this.historicQuoteService.getHistoryQuotesBuckets(
+      deployment.blockchainType,
+      tokens,
+      start,
+      end,
+    );
     const pricesBaseToken = prices[baseToken];
     const pricesQuoteToken = prices[quoteToken];
 
