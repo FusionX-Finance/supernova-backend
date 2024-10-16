@@ -71,6 +71,7 @@ export class UpdaterService {
     if (this.isUpdating[deploymentKey]) return;
 
     const isUpdating = await this.redis.client.get(`${CARBON_IS_UPDATING}:${deploymentKey}`);
+      
     if (isUpdating === '1' && process.env.NODE_ENV === 'production') return;
 
     console.log(`CARBON SERVICE - Started update cycle for ${deploymentKey}`);
@@ -141,6 +142,8 @@ export class UpdaterService {
       this.isUpdating[deploymentKey] = false;
       await this.redis.client.set(`${CARBON_IS_UPDATING}:${deploymentKey}`, 0);
     }
+    
+     
   }
 
   @Interval(5000)
