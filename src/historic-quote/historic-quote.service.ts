@@ -60,7 +60,7 @@ export class HistoricQuoteService implements OnModuleInit {
   }
 
   private async updateCoinMarketCapQuotes(): Promise<void> {
-    const latest = await this.getLatest(BlockchainType.Ethereum); // Pass the deployment to filter by blockchainType
+    const latest = await this.getLatest(BlockchainType.Mantle);// Pass the deployment to filter by blockchainType
     const quotes = await this.coinmarketcapService.getLatestQuotes();
     const newQuotes = [];
 
@@ -70,7 +70,7 @@ export class HistoricQuoteService implements OnModuleInit {
 
       if (latest[tokenAddress] && latest[tokenAddress].usd === price) continue;
 
-      q.blockchainType = BlockchainType.Ethereum;
+      q.blockchainType = BlockchainType.Mantle;
       newQuotes.push(this.repository.create(q));
     }
 
@@ -133,7 +133,7 @@ export class HistoricQuoteService implements OnModuleInit {
             usd: q.price,
             timestamp: moment.unix(q.timestamp).utc().toISOString(),
             provider: 'coinmarketcap',
-            blockchainType: BlockchainType.Ethereum,
+            blockchainType: BlockchainType.Mantle,
           }),
         );
 
@@ -343,7 +343,7 @@ export class HistoricQuoteService implements OnModuleInit {
     const data = await this.getHistoryQuotesBuckets(blockchainType, [_tokenA, _tokenB], start, end, '1 hour');
 
     const prices = [];
-    data[_tokenA].forEach((_, i) => {
+    data[_tokenA]?.forEach((_, i) => {
       const base = data[_tokenA][i];
       const quote = data[_tokenB][i];
       prices.push({

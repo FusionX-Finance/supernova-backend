@@ -118,7 +118,7 @@ export class QuoteService implements OnModuleInit {
 
       if (priceWithTimestamp) {
         const quote = existingQuotes.find((q) => q.token.id === token.id) || new Quote();
-        quote.provider = priceWithTimestamp.provider;
+        quote.provider = priceWithTimestamp.usd//priceWithTimestamp.provider;
         quote.token = token;
         quote.blockchainType = deployment.blockchainType; // Set the blockchain type here
         quote.timestamp = new Date(priceWithTimestamp.last_updated_at * 1000);

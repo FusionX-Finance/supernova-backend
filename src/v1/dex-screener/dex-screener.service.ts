@@ -14,7 +14,7 @@ export class DexScreenerService {
   ) {}
 
   async update(deployment: Deployment): Promise<void> {
-    if (deployment.blockchainType === BlockchainType.Ethereum) {
+    if (deployment.blockchainType === BlockchainType.Mantle) {
       const events = await this.getEvents(deployment);
       this.cacheManager.set(`${deployment.blockchainType}:${deployment.exchangeId}:events`, events);
     }

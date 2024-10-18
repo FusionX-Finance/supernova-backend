@@ -39,7 +39,6 @@ export class CoinMarketCapService {
       });
 
       const data = response.data.data;
-
       const tokenIds = tokenAddresses.map((address) => {
         if (address.toLowerCase() === this.ethAddress.toLowerCase()) {
           return ETH_ID.toString();
@@ -92,7 +91,7 @@ export class CoinMarketCapService {
         }
 
         responseData.forEach((d) => {
-          if (d.platform && d.platform.slug === 'ethereum') {
+          if (d.platform && d.platform.slug === 'mantle') {
             result.push({
               tokenAddress: d.platform.token_address.toLowerCase(),
               usd: d.quote.USD.price,
@@ -141,7 +140,7 @@ export class CoinMarketCapService {
         }
 
         // Filter out tokens with null platform and include only Ethereum tokens
-        const ethereumTokens = responseData.filter((token) => token.platform && token.platform.slug === 'ethereum');
+        const ethereumTokens = responseData.filter((token) => token.platform && token.platform.slug === 'mantle');
 
         result.push(...ethereumTokens);
         start += responseData.length;

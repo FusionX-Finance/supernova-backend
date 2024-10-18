@@ -7,7 +7,7 @@ import { Deployment } from '../deployment/deployment.service';
 export class CoinGeckoService {
   constructor(private configService: ConfigService) {}
 
-  private readonly baseURL = 'https://pro-api.coingecko.com/api/v3';
+  private readonly baseURL = 'https://api.coingecko.com/api/v3';
 
   async getLatestPrices(contractAddresses: string[], deployment: Deployment, convert = ['usd']): Promise<any> {
     const apiKey = this.configService.get('COINGECKO_API_KEY');
@@ -29,7 +29,7 @@ export class CoinGeckoService {
             include_last_updated_at: true,
           },
           headers: {
-            'x-cg-pro-api-key': apiKey,
+            'x-cg-demo-api-key': apiKey,
           },
         });
       });
@@ -60,7 +60,7 @@ export class CoinGeckoService {
           include_last_updated_at: true,
         },
         headers: {
-          'x-cg-pro-api-key': apiKey,
+          'x-cg-demo-api-key': apiKey,
         },
       });
 
@@ -99,7 +99,7 @@ export class CoinGeckoService {
             include_last_updated_at: true,
           },
           headers: {
-            'x-cg-pro-api-key': apiKey,
+            'x-cg-demo-api-key': apiKey,
           },
         });
       });

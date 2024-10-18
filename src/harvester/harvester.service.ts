@@ -357,7 +357,7 @@ export class HarvesterService {
   }
 
   async stringsWithMulticall(addresses: string[], abi: any, fn: string, deployment: Deployment): Promise<string[]> {
-    if (deployment.blockchainType === BlockchainType.Ethereum) {
+    if (deployment.blockchainType === BlockchainType.Mantle) {
       return this.stringsWithMulticallV2(addresses, abi, fn, deployment);
     } else {
       return this.stringsWithMulticallV3(addresses, abi, fn, deployment);
@@ -365,7 +365,7 @@ export class HarvesterService {
   }
 
   async integersWithMulticall(addresses: string[], abi: any, fn: string, deployment: Deployment): Promise<number[]> {
-    if (deployment.blockchainType === BlockchainType.Ethereum) {
+    if (deployment.blockchainType === BlockchainType.Mantle) {
       return this.integersWithMulticallEthereum(addresses, abi, fn, deployment);
     } else {
       return this.integersWithMulticallSei(addresses, abi, fn, deployment);
