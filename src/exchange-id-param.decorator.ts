@@ -13,7 +13,7 @@ export function extractExchangeId(request: Request, exchangeIdParam?: string): E
     if (subdomain.endsWith('-api')) {
       subdomain = subdomain.slice(0, -4); // Remove '-api' suffix
     }
-    if (subdomain === 'localhost') {
+    if (subdomain === 'api') {
       subdomain = ExchangeId.OGMantle;
     }
 
